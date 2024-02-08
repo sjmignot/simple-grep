@@ -1,28 +1,44 @@
 use std::cmp::min;
-const DATA:  &str = "\
-More generally, permissions tuples are defined on paths and not just variables. 
-A path is anything you can put on the left-hand side of an assignment. 
-Paths include: Variables, like a.
-Dereferences of paths, like *a.
-Array accesses of paths, like a[0].
-Fields of paths, like a.0 for tuples or a.field for structs (discussed next chapter).
-Any combination of the above, like *((*a)[0].1).
-tuples ";
+use std::fs::File;
+use std::io::BufReader;
+use std::io::prelude::*;
+use regex::Regex;
+use clap::Parser;
 
-const NEEDLE: &str = "tuples";
-const CTX_LINES: usize = 2;
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    pattern: String,
+
+    #[arg(short, long, default_value_t = 2)]
+    context_lines: usize,
+
+    #[arg(short, long, default_value_t = String::from("-"))]
+    file: String
+}
 
 fn main() {
-    let search_space: String = DATA.into();
-    let mut ctx: Vec<&[(usize, &str)]> = vec!{};
-    let search_vec = search_space.lines().enumerate().collect::<Vec<(usize, &str)>>();
+    let args = Args::parse();
+    let pattern = args.pattern;
+    let context_lines = args.context_lines;
+    let input = args.file;
+
+    let needle = Regex::new(&pattern).unwrap();
+    let f = File::open(input).unwrap();
+    let reader = BufReader::new(f);
+
+    let mut ctx: Vec<&[(usize, String)]> = vec!{};
+    let search_vec = reader.lines().enumerate().map(|(i, r)| {(i, r.unwrap())}).collect::<Vec<(usize, String)>>();
     let num_lines = search_vec.len();
 
     for (i, line) in search_vec.iter() {
-        if line.contains(NEEDLE) {
-            ctx.push(
-                &search_vec[i.saturating_sub(CTX_LINES)..min(i.saturating_add(CTX_LINES)+1, num_lines)]
-            );
+        match needle.find(line) {
+            Some(_) => {
+                ctx.push(
+                    &search_vec[i.saturating_sub(context_lines)..min(i.saturating_add(context_lines)+1, num_lines)]
+                );
+            },
+            None => ()
         }
     }
     for ls in ctx.iter() {
